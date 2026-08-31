@@ -119,7 +119,7 @@ Cada repo de servicio corre su propio pipeline en **GitHub Actions**:
 
 - **Branches**: `feature/*` → `develop` · `hotfix/*` → `main` · `chore/*` para tareas de mantenimiento.
 - **Commits**: [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `chore:`, `test:`, `refactor:`, `docs:`), en inglés, con el *por qué* en el cuerpo.
-- **PRs**: requieren aprobación de miembros del equipo, todas las conversaciones resueltas. Plantilla centralizada en [`.github/pull_request_template.md`](../pull_request_template.md).
+- **PRs**: requieren aprobación de miembros del equipo, todas las conversaciones resueltas. Plantilla centralizada en [`.github/pull_request_template.md`](https://github.com/PlataformaIntegradaInvestigadores/.github/blob/main/.github/pull_request_template.md).
 - **Código**: inglés para variables, funciones, comentarios, rutas. Sin comentarios decorativos — solo lo no obvio.
 - Cada repo trae su propio `README.md` con instrucciones detalladas para levantarlo, sus variables de entorno y cómo correr sus tests.
 
