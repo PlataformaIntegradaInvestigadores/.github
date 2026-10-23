@@ -8,10 +8,12 @@ jobs:
     name: Validar nombre de rama
     runs-on: ubuntu-latest
     steps:
-      - name: Verificar prefijo + destino (feature/*, chore/* -> develop; hotfix/*, develop -> main)
+      - name: Verificar prefijo + destino (feature/*, chore/* -> develop; hotfix/* -> main; develop -> main solo owner)
         env:
           BRANCH: ${{ github.head_ref }}
           TARGET: ${{ github.base_ref }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          RELEASE_OWNER: DonOtame
         run: |
           case "$TARGET" in
             develop)
@@ -22,8 +24,11 @@ jobs:
               ;;
             main)
               case "$BRANCH" in
-                develop|hotfix/*) echo "OK: $BRANCH -> $TARGET"; exit 0 ;;
-                *) echo "Rama '$BRANCH' invalida para destino main (usar develop o hotfix/*)"; exit 1 ;;
+                hotfix/*) echo "OK: $BRANCH -> $TARGET"; exit 0 ;;
+                develop)
+                  if [ "$AUTHOR" = "$RELEASE_OWNER" ]; then echo "OK: release $BRANCH -> $TARGET por $AUTHOR"; exit 0; fi
+                  echo "Solo $RELEASE_OWNER puede abrir develop -> main. Abre tu PR hacia develop (feature/* o chore/*), o hotfix/* si main ya tiene el error."; exit 1 ;;
+                *) echo "Rama '$BRANCH' invalida para destino main (usar hotfix/*; develop -> main solo owner)"; exit 1 ;;
               esac
               ;;
             *)
