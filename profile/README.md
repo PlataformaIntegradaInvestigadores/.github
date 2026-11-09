@@ -1,6 +1,6 @@
 # Centinela
 
-Plataforma científica multi-servicio para investigadores: búsqueda de literatura académica (integrada con Scopus), análisis de redes de coautoría, consenso social sobre publicaciones, predicción de producción científica y búsqueda semántica asistida por LLM (RAG).
+Plataforma científica multi-servicio para investigadores: búsqueda de literatura académica (integrada con Scopus), análisis de redes de coautoría, consenso social sobre publicaciones, predicción de producción científica, búsqueda semántica asistida por LLM (RAG), analítica explicativa y predictiva de temas, gobernanza algorítmica y recomendación ética de equipos de investigación.
 
 El sistema está dividido en varios repositorios independientes, cada uno con su propio ciclo de vida, historial y pipeline de CI/CD, orquestados como microservicios sobre una red Docker compartida.
 
@@ -30,6 +30,9 @@ flowchart TB
     Gateway --> SearchBff
     Gateway --> Predictive
     Gateway --> RAG
+    Gateway --> Governance
+    Gateway --> Analytics
+    Gateway --> Recommender
 
     subgraph Identity["identity-service"]
         direction TB
@@ -64,6 +67,21 @@ flowchart TB
         direction TB
         RG["FastAPI + FAISS + reranking"] --> OLLAMA["Ollama — gemma3:4b"]
     end
+
+    subgraph Governance["governance-service"]
+        direction TB
+        GV["FastAPI — gobernanza algorítmica"]
+    end
+
+    subgraph Analytics["analytics-service"]
+        direction TB
+        AN["FastAPI"] --> ANDB[("SQLite — snapshots versionados")]
+    end
+
+    subgraph Recommender["ethical-recommender-service"]
+        direction TB
+        ER["FastAPI + embeddings (MiniLM)"] --> ERFILE[("Embeddings y metadatos offline")]
+    end
 ```
 
 Todos los backends comparten una red Docker externa y se resuelven entre sí por alias de servicio (nunca `localhost`). El frontend nunca habla directo con un backend — todo pasa por `gateway-service`, que centraliza el ruteo `/api/<servicio>/` y la validación de auth.
@@ -80,10 +98,13 @@ Todos los backends comparten una red Docker externa y se resuelven entre sí por
 | [`search-bff-service`](https://github.com/PlataformaIntegradaInvestigadores/search-bff-service) | Fachada v2 estable sobre la API v1 de `search-service` | FastAPI |
 | [`predictive-service`](https://github.com/PlataformaIntegradaInvestigadores/predictive-service) | Predicción de producción científica por afiliación | FastAPI + LightGBM |
 | [`rag-service`](https://github.com/PlataformaIntegradaInvestigadores/rag-service) | Búsqueda semántica asistida por LLM sobre el corpus de Scopus | FastAPI + FAISS + Ollama (Gemma 3) |
+| [`governance-service`](https://github.com/PlataformaIntegradaInvestigadores/governance-service) | Gobernanza algorítmica (Componente E de Centinela V3). Hoy expone health, estado y OpenAPI; las políticas están pendientes | FastAPI |
+| [`analytics-service`](https://github.com/PlataformaIntegradaInvestigadores/analytics-service) | Analítica explicativa y predictiva de temas: curaduría de datos, series temporales, pronósticos de referencia y evaluación | FastAPI + SQLite |
+| [`ethical-recommender-service`](https://github.com/PlataformaIntegradaInvestigadores/ethical-recommender-service) | Recomendación de colaboradores para completar un equipo, con re-ranking que cuida la equidad entre instituciones y autores de baja visibilidad | FastAPI + embeddings (MiniLM) |
 
 ## Patrón de arquitectura
 
-Los 6 backends (Django y FastAPI) siguen el mismo esquema de capas — **Clean/Hexagonal Architecture** — para que moverse entre repos sea predecible:
+Los 9 backends (Django y FastAPI) siguen el mismo esquema de capas — **Clean/Hexagonal Architecture** — para que moverse entre repos sea predecible:
 
 ```
 <módulo>/
@@ -102,16 +123,18 @@ Los 6 backends (Django y FastAPI) siguen el mismo esquema de capas — **Clean/H
   tests/               # test_*.py (pytest / pytest-django)
 ```
 
-Los repos Django (`social-service`, `search-service`, `identity-service`) y los FastAPI (`search-bff-service`, `predictive-service`, `rag-service`) mapean este mismo patrón a su forma idiomática. `predictive-service` es una variante más liviana (sin `use_cases/` explícito, servicio de un solo propósito).
+Los repos Django (`social-service`, `search-service`, `identity-service`) y los FastAPI (`search-bff-service`, `predictive-service`, `rag-service`, `governance-service`, `analytics-service`, `ethical-recommender-service`) mapean este mismo patrón a su forma idiomática. `predictive-service` es una variante más liviana (sin `use_cases/` explícito, servicio de un solo propósito).
 
 ## CI/CD
 
 Cada repo de servicio corre su propio pipeline en **GitHub Actions**:
 
-1. **Tests unitarios** (+ de integración donde aplica) con bases de datos reales en contenedores efímeros del job.
+1. **Control de calidad**: linters y tests unitarios (+ de integración donde aplica) con bases de datos reales en contenedores efímeros del job.
 2. **Gate de cobertura**: mínimo **90%**. El build falla si no se cumple.
 3. **Build de imagen Docker**.
 4. **Deploy automático a staging** al mergear a `develop`, con healthcheck y rollback automático si falla.
+
+Nota: `ethical-recommender-service` también despliega automáticamente, pero necesita en el servidor los artefactos offline (embeddings y CSV de autores), que no viajan en Git ni en la imagen.
 
 `main` se mantiene protegida y solo recibe cambios validados en `develop`.
 
